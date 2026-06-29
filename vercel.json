@@ -1,0 +1,5 @@
+{
+  "rewrites": [
+    { "source": "/trcont-api/unauthorized/dislocation", "destination": "/api/proxy" }
+  ]
+}
