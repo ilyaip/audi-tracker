@@ -10,6 +10,7 @@ const {
   containerNumber,
   routePoints,
   current,
+  progress,
   loading,
   error,
   lastUpdated,
@@ -39,6 +40,12 @@ function onClear() {
       <div class="container-badge">
         <span class="container-badge__label">Контейнер</span>
         <span class="container-badge__value">{{ containerNumber }}</span>
+      </div>
+      <div v-if="progress !== null" class="progress" title="Пройдено пути от начала наблюдения">
+        <div class="progress__ring" :style="{ '--pct': progress }">
+          <span class="progress__num">{{ progress }}%</span>
+        </div>
+        <span class="progress__caption">пройдено</span>
       </div>
       <div class="topbar__actions">
         <span v-if="lastUpdated" class="updated">
@@ -131,6 +138,42 @@ function onClear() {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-weight: 600;
   font-size: 15px;
+}
+.progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.progress__ring {
+  --pct: 0;
+  position: relative;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: conic-gradient(
+    var(--accent) calc(var(--pct) * 1%),
+    var(--border) 0
+  );
+  display: grid;
+  place-items: center;
+}
+.progress__ring::before {
+  content: '';
+  position: absolute;
+  inset: 4px;
+  border-radius: 50%;
+  background: var(--bg);
+}
+.progress__num {
+  position: relative;
+  font-size: 12px;
+  font-weight: 700;
+}
+.progress__caption {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
 }
 .topbar__actions {
   margin-left: auto;

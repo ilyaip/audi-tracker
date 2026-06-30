@@ -51,6 +51,20 @@ const current = computed<TrackPoint | null>(() =>
   history.value.length ? history.value[history.value.length - 1] : null,
 )
 
+/**
+ * Процент пройденного пути (0–100).
+ * База — максимальный зафиксированный остаток (точка старта наблюдения),
+ * прогресс считается относительно текущего остатка.
+ */
+const progress = computed<number | null>(() => {
+  if (!history.value.length) return null
+  const start = Math.max(...history.value.map((p) => p.leftDistanceKm))
+  const currentLeft = history.value[history.value.length - 1].leftDistanceKm
+  if (!Number.isFinite(start) || start <= 0) return null
+  const pct = ((start - currentLeft) / start) * 100
+  return Math.min(100, Math.max(0, Math.round(pct)))
+})
+
 /** Уникальные точки по координатам — для отрисовки линии маршрута без дублей подряд. */
 const routePoints = computed<TrackPoint[]>(() => {
   const out: TrackPoint[] = []
@@ -118,6 +132,7 @@ export function useTracking() {
     history,
     routePoints,
     current,
+    progress,
     loading,
     error,
     lastUpdated,
