@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted } from 'vue'
+import { computed, onBeforeUnmount, onMounted } from 'vue'
 import TrackMap from './components/TrackMap.vue'
 import StatusCard from './components/StatusCard.vue'
 import EventsTimeline from './components/EventsTimeline.vue'
@@ -14,12 +14,35 @@ const {
   loading,
   error,
   lastUpdated,
+  syncStatus,
+  serverCount,
   refresh,
   syncServerHistory,
   clearHistory,
 } = useTracking()
 
 let timer: number | undefined
+
+const syncText = computed(() => {
+  switch (syncStatus.value) {
+    case 'syncing':
+      return 'синхронизация…'
+    case 'ok':
+      return serverCount.value !== null
+        ? `сервер: ${serverCount.value} точек`
+        : 'синхронизировано'
+    case 'error':
+      return 'сервер недоступен'
+    default:
+      return 'сервер: нет данных'
+  }
+})
+
+const syncTitle = computed(() =>
+  syncStatus.value === 'idle'
+    ? 'Серверная история ещё не собрана (GitHub Actions не отработал)'
+    : 'Фоновый сбор данных через GitHub Actions',
+)
 
 function isStale(): boolean {
   if (!lastUpdated.value) return true
@@ -77,6 +100,10 @@ function onClear() {
         <span class="progress__caption">пройдено</span>
       </div>
       <div class="topbar__actions">
+        <span class="sync" :class="`sync--${syncStatus}`" :title="syncTitle">
+          <span class="sync__dot" />
+          {{ syncText }}
+        </span>
         <span v-if="lastUpdated" class="updated">
           обновлено {{ timeAgo(lastUpdated) }} · авто каждые 30 мин
         </span>
@@ -213,6 +240,47 @@ function onClear() {
 .updated {
   font-size: 12px;
   color: var(--text-muted);
+}
+
+.sync {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+}
+.sync__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  flex: 0 0 auto;
+}
+.sync--ok .sync__dot {
+  background: #2ecc71;
+}
+.sync--ok {
+  color: #2ecc71;
+}
+.sync--error .sync__dot {
+  background: var(--accent);
+}
+.sync--error {
+  color: var(--accent);
+}
+.sync--syncing .sync__dot {
+  background: #f1c40f;
+  animation: pulse 1s ease-in-out infinite;
+}
+@keyframes pulse {
+  50% {
+    opacity: 0.3;
+  }
 }
 
 .btn {

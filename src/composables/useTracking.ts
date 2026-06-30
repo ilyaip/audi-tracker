@@ -71,6 +71,11 @@ const loading = ref(false)
 const error = ref<string | null>(null)
 const lastUpdated = ref<string | null>(localStorage.getItem(TS_KEY))
 
+/** Статус синхронизации с серверной историей (GitHub Actions). */
+const syncStatus = ref<'idle' | 'syncing' | 'ok' | 'error'>('idle')
+/** Сколько точек содержит серверный файл (null — ещё не синхронизировались / недоступен). */
+const serverCount = ref<number | null>(null)
+
 const current = computed<TrackPoint | null>(() =>
   history.value.length ? history.value[history.value.length - 1] : null,
 )
@@ -165,19 +170,31 @@ function clearHistory(): void {
  * и объединяет её с локальной. localStorage не перезаписывается, а дополняется.
  */
 async function syncServerHistory(): Promise<void> {
+  syncStatus.value = 'syncing'
   try {
     const res = await fetch(HISTORY_URL, { cache: 'no-cache' })
-    if (!res.ok) return
+    if (!res.ok) {
+      // 404 = файла/ветки data ещё нет (workflow не отработал) — это не ошибка.
+      syncStatus.value = res.status === 404 ? 'idle' : 'error'
+      return
+    }
     const serverPoints = (await res.json()) as TrackPoint[]
-    if (!Array.isArray(serverPoints) || serverPoints.length === 0) return
+    if (!Array.isArray(serverPoints)) {
+      syncStatus.value = 'error'
+      return
+    }
+
+    serverCount.value = serverPoints.length
 
     const merged = mergePoints(history.value, serverPoints)
     if (merged.length !== history.value.length) {
       history.value = merged
       persist(history.value)
     }
+    syncStatus.value = 'ok'
   } catch {
-    // Нет сети / файла ещё не существует — молча игнорируем, локальные точки остаются.
+    // Нет сети / файла ещё не существует — локальные точки остаются.
+    syncStatus.value = 'error'
   }
 }
 
@@ -191,6 +208,8 @@ export function useTracking() {
     loading,
     error,
     lastUpdated,
+    syncStatus,
+    serverCount,
     refresh,
     syncServerHistory,
     clearHistory,
