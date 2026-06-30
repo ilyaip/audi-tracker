@@ -9,8 +9,8 @@ const HISTORY_URL =
   import.meta.env.VITE_HISTORY_URL ||
   'https://raw.githubusercontent.com/ilyaip/audi-tracker/data/history.json'
 
-/** Интервал фонового опроса данных, мс (30 минут). */
-export const REFRESH_INTERVAL_MS = 30 * 60 * 1000
+/** Интервал фонового опроса данных, мс (15 минут). */
+export const REFRESH_INTERVAL_MS = 15 * 60 * 1000
 
 /** Ключ дедупликации точки: по event_id, с запасным вариантом по времени и координатам. */
 function pointKey(p: TrackPoint): string {

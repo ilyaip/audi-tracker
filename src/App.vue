@@ -105,7 +105,7 @@ function onClear() {
           {{ syncText }}
         </span>
         <span v-if="lastUpdated" class="updated">
-          обновлено {{ timeAgo(lastUpdated) }} · авто каждые 30 мин
+          обновлено {{ timeAgo(lastUpdated) }} · авто каждые 15 мин
         </span>
         <button class="btn btn--ghost" :disabled="loading" @click="onClear">
           Очистить

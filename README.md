@@ -59,9 +59,9 @@ npm run preview
 
 ## Фоновый сбор (даже когда приложение закрыто)
 
-Vercel на бесплатном тарифе запускает cron максимум раз в сутки, поэтому сбор раз в 30 минут вынесен в **GitHub Actions**:
+Vercel на бесплатном тарифе запускает cron максимум раз в сутки, поэтому сбор раз в 15 минут вынесен в **GitHub Actions**:
 
-- `.github/workflows/collect.yml` — расписание `*/30 * * * *`;
+- `.github/workflows/collect.yml` — поддерживает запуск по расписанию (`4,19,34,49 * * * *`, запасной вариант) и по внешнему триггеру (`workflow_dispatch`);
 - `scripts/collect.mjs` — запрашивает текущее положение и дописывает точку (с дедупом по `event_id`);
 - данные хранятся в файле `history.json` в отдельной ветке **`data`** (чтобы коммиты с данными не триггерили редеплой Vercel);
 - фронт читает этот файл с `raw.githubusercontent.com` (`VITE_HISTORY_URL`) и **объединяет** с историей из localStorage — локальные точки не теряются.
@@ -71,4 +71,20 @@ Vercel на бесплатном тарифе запускает cron макси
 - Workflow коммитит через `GITHUB_TOKEN` (права `contents: write` уже прописаны в workflow).
 - Запустить можно вручную: вкладка **Actions → Collect container dislocation → Run workflow**.
 
-Расписание GitHub Actions не гарантирует точную минуту запуска (возможны задержки под нагрузкой) — для 30-минутного шага это некритично.
+### Надёжный триггер каждые 15 минут (cron-job.org)
+
+Встроенное расписание GitHub Actions — best-effort: запуск может задержаться или быть пропущен. Для стабильного шага в 15 минут используется внешний планировщик, который вызывает `workflow_dispatch` через GitHub API.
+
+1. Создать **fine-grained Personal Access Token**: GitHub → Settings → Developer settings → Personal access tokens → Fine-grained. Доступ только к репозиторию `audi-tracker`, разрешение **Actions: Read and write**, задать срок действия.
+2. Завести бесплатный аккаунт на https://cron-job.org и создать job:
+   - **URL:** `https://api.github.com/repos/ilyaip/audi-tracker/actions/workflows/collect.yml/dispatches`
+   - **Method:** `POST`
+   - **Headers:**
+     - `Authorization: Bearer <ТОКЕН>`
+     - `Accept: application/vnd.github+json`
+     - `X-GitHub-Api-Version: 2022-11-28`
+   - **Body:** `{"ref":"main"}`
+   - **Расписание:** каждые 15 минут.
+3. Успешный ответ GitHub — `204 No Content` (тела нет, это нормально).
+
+Токен хранится только в cron-job.org и в репозиторий не попадает.

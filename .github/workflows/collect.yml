@@ -2,8 +2,10 @@ name: Collect container dislocation
 
 on:
   schedule:
-    # Каждые 30 минут. GitHub может задержать запуск под нагрузкой — это нормально.
-    - cron: '*/30 * * * *'
+    # Каждые 15 минут (со сдвигом от пиковых слотов). Это лишь запасной вариант —
+    # расписание GitHub Actions best-effort и может задерживаться/пропускаться.
+    # Основной триггер — внешний (cron-job.org → workflow_dispatch).
+    - cron: '4,19,34,49 * * * *'
   workflow_dispatch: {}
 
 permissions:
