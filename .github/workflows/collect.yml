@@ -1,0 +1,58 @@
+name: Collect container dislocation
+
+on:
+  schedule:
+    # Каждые 30 минут. GitHub может задержать запуск под нагрузкой — это нормально.
+    - cron: '*/30 * * * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: collect-dislocation
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main (для скриптов)
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Загрузить текущую историю из ветки data
+        run: |
+          mkdir -p out
+          git fetch origin data --depth=1 || true
+          if git cat-file -e origin/data:history.json 2>/dev/null; then
+            git show origin/data:history.json > out/history.json
+            echo "Загружена существующая история"
+          else
+            echo "[]" > out/history.json
+            echo "История пока пустая — создаём новую"
+          fi
+
+      - name: Собрать текущее положение
+        env:
+          CONTAINER_NUMBER: TKRU4596490
+        run: node scripts/collect.mjs out/history.json
+
+      - name: Закоммитить в ветку data
+        run: |
+          cd out
+          git init -q
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -q -b data
+          git add history.json
+          if git commit -q -m "data: обновление истории дислокации"; then
+            git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" data
+            echo "Изменения отправлены в ветку data"
+          else
+            echo "Изменений нет — коммит не требуется"
+          fi

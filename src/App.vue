@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { onBeforeUnmount, onMounted } from 'vue'
 import TrackMap from './components/TrackMap.vue'
 import StatusCard from './components/StatusCard.vue'
 import EventsTimeline from './components/EventsTimeline.vue'
-import { useTracking } from './composables/useTracking'
+import { REFRESH_INTERVAL_MS, useTracking } from './composables/useTracking'
 import { formatDateTime, timeAgo } from './utils/format'
 
 const {
@@ -15,12 +15,41 @@ const {
   error,
   lastUpdated,
   refresh,
+  syncServerHistory,
   clearHistory,
 } = useTracking()
 
-onMounted(() => {
-  // Автоматически тянем актуальный статус при первом запуске.
+let timer: number | undefined
+
+function isStale(): boolean {
+  if (!lastUpdated.value) return true
+  return Date.now() - new Date(lastUpdated.value).getTime() >= REFRESH_INTERVAL_MS
+}
+
+function onVisibilityChange() {
+  // При возврате на вкладку догоняем, если давно не обновлялись.
+  if (document.visibilityState === 'visible' && isStale()) {
+    syncServerHistory()
+    refresh()
+  }
+}
+
+onMounted(async () => {
+  // Сначала подтягиваем фон, собранный пока приложение было закрыто,
+  // затем запрашиваем актуальный статус прямо сейчас.
+  await syncServerHistory()
   refresh()
+  // Фоновый опрос раз в 30 минут, пока вкладка открыта.
+  timer = window.setInterval(() => {
+    syncServerHistory()
+    refresh()
+  }, REFRESH_INTERVAL_MS)
+  document.addEventListener('visibilitychange', onVisibilityChange)
+})
+
+onBeforeUnmount(() => {
+  if (timer !== undefined) clearInterval(timer)
+  document.removeEventListener('visibilitychange', onVisibilityChange)
 })
 
 function onClear() {
@@ -49,7 +78,7 @@ function onClear() {
       </div>
       <div class="topbar__actions">
         <span v-if="lastUpdated" class="updated">
-          обновлено {{ timeAgo(lastUpdated) }}
+          обновлено {{ timeAgo(lastUpdated) }} · авто каждые 30 мин
         </span>
         <button class="btn btn--ghost" :disabled="loading" @click="onClear">
           Очистить

@@ -4,6 +4,30 @@ import type { DislocationEvent, TrackPoint } from '../types/dislocation'
 
 const CONTAINER = import.meta.env.VITE_CONTAINER_NUMBER || 'TKRU4596490'
 const STORAGE_KEY = `audi-tracker:history:${CONTAINER}`
+const TS_KEY = `audi-tracker:lastUpdated:${CONTAINER}`
+const HISTORY_URL =
+  import.meta.env.VITE_HISTORY_URL ||
+  'https://raw.githubusercontent.com/ilyaip/audi-tracker/data/history.json'
+
+/** Интервал фонового опроса данных, мс (30 минут). */
+export const REFRESH_INTERVAL_MS = 30 * 60 * 1000
+
+/** Ключ дедупликации точки: по event_id, с запасным вариантом по времени и координатам. */
+function pointKey(p: TrackPoint): string {
+  return p.eventId || `${p.datetime}:${p.latitude},${p.longitude}`
+}
+
+/** Объединяет две истории без дублей и сортирует по времени события. */
+function mergePoints(a: TrackPoint[], b: TrackPoint[]): TrackPoint[] {
+  const byKey = new Map<string, TrackPoint>()
+  for (const p of [...a, ...b]) {
+    const key = pointKey(p)
+    if (!byKey.has(key)) byKey.set(key, p)
+  }
+  return [...byKey.values()].sort(
+    (x, y) => new Date(x.datetime).getTime() - new Date(y.datetime).getTime(),
+  )
+}
 
 function loadHistory(): TrackPoint[] {
   try {
@@ -45,7 +69,7 @@ function toTrackPoint(event: DislocationEvent): TrackPoint {
 const history = ref<TrackPoint[]>(loadHistory())
 const loading = ref(false)
 const error = ref<string | null>(null)
-const lastUpdated = ref<string | null>(null)
+const lastUpdated = ref<string | null>(localStorage.getItem(TS_KEY))
 
 const current = computed<TrackPoint | null>(() =>
   history.value.length ? history.value[history.value.length - 1] : null,
@@ -111,6 +135,11 @@ async function refresh(): Promise<void> {
     }
 
     lastUpdated.value = new Date().toISOString()
+    try {
+      localStorage.setItem(TS_KEY, lastUpdated.value)
+    } catch {
+      // игнорируем недоступность localStorage
+    }
   } catch (e) {
     if ((e as Error).name === 'AbortError') return
     error.value = e instanceof Error ? e.message : 'Неизвестная ошибка запроса'
@@ -123,7 +152,33 @@ function clearHistory(): void {
   history.value = []
   persist(history.value)
   lastUpdated.value = null
+  try {
+    localStorage.removeItem(TS_KEY)
+  } catch {
+    // игнорируем
+  }
   error.value = null
+}
+
+/**
+ * Подтягивает серверную историю (собранную GitHub Actions, пока приложение было закрыто)
+ * и объединяет её с локальной. localStorage не перезаписывается, а дополняется.
+ */
+async function syncServerHistory(): Promise<void> {
+  try {
+    const res = await fetch(HISTORY_URL, { cache: 'no-cache' })
+    if (!res.ok) return
+    const serverPoints = (await res.json()) as TrackPoint[]
+    if (!Array.isArray(serverPoints) || serverPoints.length === 0) return
+
+    const merged = mergePoints(history.value, serverPoints)
+    if (merged.length !== history.value.length) {
+      history.value = merged
+      persist(history.value)
+    }
+  } catch {
+    // Нет сети / файла ещё не существует — молча игнорируем, локальные точки остаются.
+  }
 }
 
 export function useTracking() {
@@ -137,6 +192,7 @@ export function useTracking() {
     error,
     lastUpdated,
     refresh,
+    syncServerHistory,
     clearHistory,
   }
 }
