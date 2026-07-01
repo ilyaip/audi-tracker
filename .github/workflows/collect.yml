@@ -42,6 +42,8 @@ jobs:
       - name: Собрать текущее положение
         env:
           CONTAINER_NUMBER: TKRU4596490
+          TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
+          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
         run: node scripts/collect.mjs out/history.json
 
       - name: Закоммитить в ветку data

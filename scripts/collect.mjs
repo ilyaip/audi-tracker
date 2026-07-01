@@ -9,6 +9,8 @@ import { readFileSync, writeFileSync } from 'node:fs'
 
 const CONTAINER = process.env.CONTAINER_NUMBER || 'TKRU4596490'
 const filePath = process.argv[2]
+const TG_TOKEN = process.env.TG_BOT_TOKEN || ''
+const TG_CHAT = process.env.TG_CHAT_ID || ''
 
 if (!filePath) {
   console.error('Не указан путь к файлу истории. Пример: node scripts/collect.mjs out/history.json')
@@ -77,6 +79,59 @@ function loadHistory(path) {
   }
 }
 
+/** Форматирует число с разделителем тысяч (8878 → «8 878»). */
+function fmtNum(n) {
+  return Number(n).toLocaleString('ru-RU', { maximumFractionDigits: 0 })
+}
+
+/** Считает % пройденного по всей накопленной истории. */
+function calcProgress(history, current) {
+  const start = Math.max(...history.map((p) => p.leftDistanceKm))
+  if (!isFinite(start) || start <= 0) return null
+  const pct = ((start - current.leftDistanceKm) / start) * 100
+  return Math.min(100, Math.max(0, Math.round(pct)))
+}
+
+/**
+ * Отправляет сообщение в Telegram.
+ * Если токен/chat_id не заданы — молча пропускает.
+ */
+function sendTelegram(text) {
+  if (!TG_TOKEN || !TG_CHAT) return Promise.resolve()
+
+  const body = JSON.stringify({ chat_id: TG_CHAT, text, parse_mode: 'HTML' })
+
+  return new Promise((resolve) => {
+    const req = https.request(
+      {
+        host: 'api.telegram.org',
+        path: `/bot${TG_TOKEN}/sendMessage`,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(body),
+        },
+      },
+      (res) => {
+        let data = ''
+        res.on('data', (c) => (data += c))
+        res.on('end', () => {
+          if (res.statusCode !== 200) {
+            console.warn(`Telegram ответил ${res.statusCode}: ${data.slice(0, 200)}`)
+          }
+          resolve()
+        })
+      },
+    )
+    req.on('error', (e) => {
+      console.warn('Ошибка отправки в Telegram:', String(e))
+      resolve()
+    })
+    req.write(body)
+    req.end()
+  })
+}
+
 const data = await fetchDislocation()
 const event = data?.result?.[0]
 
@@ -101,3 +156,25 @@ history.push(point)
 history.sort((a, b) => new Date(a.datetime).getTime() - new Date(b.datetime).getTime())
 writeFileSync(filePath, JSON.stringify(history, null, 2) + '\n')
 console.log(`Добавлена точка: ${point.stationNameRu} @ ${point.datetime}`)
+
+// Отправляем уведомление в Telegram.
+const pct = calcProgress(history, point)
+const pctStr = pct !== null ? ` (${pct}% пройдено)` : ''
+const dt = new Date(point.datetime).toLocaleString('ru-RU', {
+  day: '2-digit', month: '2-digit', year: 'numeric',
+  hour: '2-digit', minute: '2-digit',
+  timeZone: 'Europe/Moscow',
+})
+
+const message = [
+  `🚂 <b>Новая точка маршрута</b>`,
+  ``,
+  `📍 <b>${point.stationNameRu}</b> (${point.stationNameEn})`,
+  `📅 ${dt}`,
+  `🌍 ${point.countryRu}`,
+  `🔄 ${point.statusRu}`,
+  `🛣 Осталось: ${fmtNum(point.leftDistanceKm)} км${pctStr}`,
+].join('\n')
+
+await sendTelegram(message)
+console.log('Уведомление отправлено в Telegram')
