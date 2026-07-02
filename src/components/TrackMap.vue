@@ -13,11 +13,13 @@ const isReady = ref(false)
 
 let ymapsApi: any = null
 let map: any = null
+let clusterer: any = null
 
 function render() {
   if (!map || !ymapsApi) return
 
   map.geoObjects.removeAll()
+  clusterer = null
 
   const coords = props.points.map((p) => [p.latitude, p.longitude] as [number, number])
 
@@ -26,7 +28,7 @@ function render() {
     return
   }
 
-  // Линия маршрута.
+  // Линия маршрута (по всем точкам).
   if (coords.length > 1) {
     const line = new ymapsApi.Polyline(
       coords,
@@ -40,24 +42,74 @@ function render() {
     map.geoObjects.add(line)
   }
 
-  // Маркеры точек.
-  props.points.forEach((p, idx) => {
-    const isLast = idx === props.points.length - 1
-    const placemark = new ymapsApi.Placemark(
-      [p.latitude, p.longitude],
-      {
-        balloonContentHeader: `<strong>${p.stationNameRu}</strong>`,
-        balloonContentBody: `${p.statusRu}<br/>${p.countryRu}`,
-        balloonContentFooter: new Date(p.datetime).toLocaleString('ru-RU'),
-        hintContent: p.stationNameRu,
-      },
-      {
-        preset: isLast ? 'islands#redAutoIcon' : 'islands#grayCircleDotIcon',
-        zIndex: isLast ? 1000 : 100,
-      },
-    )
-    map.geoObjects.add(placemark)
+  const lastIdx = props.points.length - 1
+
+  // Промежуточные точки — в кластеризатор (снимает лаги и наложение маркеров).
+  clusterer = new ymapsApi.Clusterer({
+    preset: 'islands#invertedGrayClusterIcons',
+    groupByCoordinates: false,
+    clusterDisableClickZoom: false,
+    clusterHideIconOnBalloonOpen: false,
+    geoObjectHideIconOnBalloonOpen: false,
+    gridSize: 64,
+    minClusterSize: 2,
   })
+
+  const placemarks = props.points
+    .map((p, idx) => ({ p, idx }))
+    // Старт и текущую позицию показываем отдельными маркерами — не кластеризуем.
+    .filter(({ idx }) => idx !== 0 && idx !== lastIdx)
+    .map(({ p }) =>
+      new ymapsApi.Placemark(
+        [p.latitude, p.longitude],
+        {
+          balloonContentHeader: `<strong>${p.stationNameRu}</strong>`,
+          balloonContentBody: `${p.statusRu}<br/>${p.countryRu}`,
+          balloonContentFooter: new Date(p.datetime).toLocaleString('ru-RU'),
+          hintContent: p.stationNameRu,
+        },
+        { preset: 'islands#grayCircleDotIcon' },
+      ),
+    )
+
+  clusterer.add(placemarks)
+  map.geoObjects.add(clusterer)
+
+  // Отдельный маркер старта.
+  const start = props.points[0]
+  if (props.points.length > 1) {
+    map.geoObjects.add(
+      new ymapsApi.Placemark(
+        [start.latitude, start.longitude],
+        {
+          balloonContentHeader: `<strong>Старт наблюдения: ${start.stationNameRu}</strong>`,
+          balloonContentBody: `${start.statusRu}<br/>${start.countryRu}`,
+          balloonContentFooter: new Date(start.datetime).toLocaleString('ru-RU'),
+          hintContent: `Старт: ${start.stationNameRu}`,
+        },
+        {
+          preset: 'islands#greenCircleDotIconWithCaption',
+          iconCaption: 'Старт',
+          zIndex: 900,
+        },
+      ),
+    )
+  }
+
+  // Отдельный маркер текущей позиции (последняя точка).
+  const current = props.points[lastIdx]
+  map.geoObjects.add(
+    new ymapsApi.Placemark(
+      [current.latitude, current.longitude],
+      {
+        balloonContentHeader: `<strong>${current.stationNameRu}</strong>`,
+        balloonContentBody: `${current.statusRu}<br/>${current.countryRu}`,
+        balloonContentFooter: new Date(current.datetime).toLocaleString('ru-RU'),
+        hintContent: current.stationNameRu,
+      },
+      { preset: 'islands#redAutoIcon', zIndex: 1000 },
+    ),
+  )
 
   // Подгоняем границы карты под маршрут.
   if (coords.length === 1) {
