@@ -122,6 +122,11 @@ function render() {
   }
 }
 
+function handleResize() {
+  // Пересчёт размеров карты, если контейнер изменился (ресайз, смена ориентации).
+  if (map) map.container.fitToViewport()
+}
+
 onMounted(async () => {
   try {
     ymapsApi = await loadYandexMaps()
@@ -137,12 +142,16 @@ onMounted(async () => {
     )
     isReady.value = true
     render()
+    // Подстраховка на случай, если контейнер получил размеры уже после инициализации.
+    map.container.fitToViewport()
+    window.addEventListener('resize', handleResize)
   } catch (e) {
     mapError.value = e instanceof Error ? e.message : 'Ошибка загрузки карты'
   }
 })
 
 onBeforeUnmount(() => {
+  window.removeEventListener('resize', handleResize)
   if (map) {
     map.destroy()
     map = null

@@ -396,7 +396,9 @@ onBeforeUnmount(() => {
     grid-template-columns: 1fr;
   }
   .panel--map {
-    min-height: 380px;
+    /* Явная высота обязательна: без неё height:100% у контейнера карты = 0. */
+    height: 65vh;
+    min-height: 320px;
   }
   .topbar__actions {
     width: 100%;
