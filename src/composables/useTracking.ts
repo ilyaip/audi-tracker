@@ -76,8 +76,23 @@ const syncStatus = ref<'idle' | 'syncing' | 'ok' | 'error'>('idle')
 /** Сколько точек содержит серверный файл (null — ещё не синхронизировались / недоступен). */
 const serverCount = ref<number | null>(null)
 
+/**
+ * Валидны ли координаты точки.
+ * Сервис иногда отдаёт (0, 0) — это мусор, который ломает карту и графики.
+ */
+function isValidPoint(p: TrackPoint): boolean {
+  const { latitude: lat, longitude: lon } = p
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return false
+  if (lat === 0 && lon === 0) return false
+  if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return false
+  return true
+}
+
+/** История без битых точек — на ней строятся все отображения и расчёты. */
+const validHistory = computed<TrackPoint[]>(() => history.value.filter(isValidPoint))
+
 const current = computed<TrackPoint | null>(() =>
-  history.value.length ? history.value[history.value.length - 1] : null,
+  validHistory.value.length ? validHistory.value[validHistory.value.length - 1] : null,
 )
 
 /**
@@ -86,9 +101,10 @@ const current = computed<TrackPoint | null>(() =>
  * прогресс считается относительно текущего остатка.
  */
 const progress = computed<number | null>(() => {
-  if (!history.value.length) return null
-  const start = Math.max(...history.value.map((p) => p.leftDistanceKm))
-  const currentLeft = history.value[history.value.length - 1].leftDistanceKm
+  const points = validHistory.value
+  if (!points.length) return null
+  const start = Math.max(...points.map((p) => p.leftDistanceKm))
+  const currentLeft = points[points.length - 1].leftDistanceKm
   if (!Number.isFinite(start) || start <= 0) return null
   const pct = ((start - currentLeft) / start) * 100
   return Math.min(100, Math.max(0, Math.round(pct)))
@@ -97,7 +113,7 @@ const progress = computed<number | null>(() => {
 /** Уникальные точки по координатам — для отрисовки линии маршрута без дублей подряд. */
 const routePoints = computed<TrackPoint[]>(() => {
   const out: TrackPoint[] = []
-  for (const p of history.value) {
+  for (const p of validHistory.value) {
     const prev = out[out.length - 1]
     if (!prev || prev.latitude !== p.latitude || prev.longitude !== p.longitude) {
       out.push(p)
@@ -124,6 +140,18 @@ async function refresh(): Promise<void> {
     }
 
     const point = toTrackPoint(event)
+
+    // Битые координаты (0,0 и т.п.) не сохраняем — они ломают карту и расчёты.
+    if (!isValidPoint(point)) {
+      lastUpdated.value = new Date().toISOString()
+      try {
+        localStorage.setItem(TS_KEY, lastUpdated.value)
+      } catch {
+        // игнорируем
+      }
+      return
+    }
+
     const last = history.value[history.value.length - 1]
 
     // Добавляем точку, только если событие новое (по event_id или времени).

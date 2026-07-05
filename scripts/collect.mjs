@@ -141,6 +141,22 @@ if (!event) {
 }
 
 const point = toTrackPoint(event)
+
+// Сервис иногда отдаёт координаты (0,0) — это мусор, не сохраняем.
+function isValidPoint(p) {
+  const lat = p.latitude
+  const lon = p.longitude
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return false
+  if (lat === 0 && lon === 0) return false
+  if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return false
+  return true
+}
+
+if (!isValidPoint(point)) {
+  console.log(`Пропущена битая точка с координатами (${point.latitude}, ${point.longitude})`)
+  process.exit(0)
+}
+
 const history = loadHistory(filePath)
 
 const exists = history.some(
