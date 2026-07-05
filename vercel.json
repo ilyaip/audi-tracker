@@ -1,4 +1,7 @@
 {
+  "git": {
+    "deploymentEnabled": { "data": false }
+  },
   "rewrites": [
     { "source": "/trcont-api/unauthorized/dislocation", "destination": "/api/proxy" }
   ]

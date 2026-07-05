@@ -49,11 +49,14 @@ jobs:
       - name: Закоммитить в ветку data
         run: |
           cd out
+          # vercel.json в самой ветке data отключает автодеплой Vercel для неё,
+          # иначе каждый коммит истории плодит (падающие) деплои и жрёт дневной лимит.
+          printf '{\n  "git": {\n    "deploymentEnabled": { "data": false }\n  }\n}\n' > vercel.json
           git init -q
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -q -b data
-          git add history.json
+          git add history.json vercel.json
           if git commit -q -m "data: обновление истории дислокации"; then
             git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" data
             echo "Изменения отправлены в ветку data"
