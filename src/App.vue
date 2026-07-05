@@ -38,6 +38,13 @@ const syncText = computed(() => {
   }
 })
 
+// Цвет кольца прогресса: плавно от красного (0%) к зелёному (100%).
+const progressColor = computed(() => {
+  const p = progress.value ?? 0
+  const hue = Math.round((p / 100) * 130) // 0 = красный, 130 = зелёный
+  return `hsl(${hue}, 78%, 48%)`
+})
+
 const syncTitle = computed(() =>
   syncStatus.value === 'idle'
     ? 'Серверная история ещё не собрана (GitHub Actions не отработал)'
@@ -94,7 +101,7 @@ function onClear() {
         <span class="container-badge__value">{{ containerNumber }}</span>
       </div>
       <div v-if="progress !== null" class="progress" title="Пройдено пути от начала наблюдения">
-        <div class="progress__ring" :style="{ '--pct': progress }">
+        <div class="progress__ring" :style="{ '--pct': progress, '--ring-color': progressColor }">
           <span class="progress__num">{{ progress }}%</span>
         </div>
         <span class="progress__caption">пройдено</span>
@@ -207,9 +214,10 @@ function onClear() {
   height: 46px;
   border-radius: 50%;
   background: conic-gradient(
-    var(--accent) calc(var(--pct) * 1%),
+    var(--ring-color, var(--accent)) calc(var(--pct) * 1%),
     var(--border) 0
   );
+  transition: background 0.4s ease;
   display: grid;
   place-items: center;
 }
@@ -345,6 +353,7 @@ function onClear() {
 .layout {
   display: grid;
   grid-template-columns: minmax(0, 1.6fr) minmax(320px, 1fr);
+  align-items: start;
   gap: 16px;
   flex: 1;
 }
@@ -358,6 +367,17 @@ function onClear() {
   padding: 10px;
   min-height: 560px;
   display: flex;
+}
+
+/* На десктопе карта фиксированной высоты и «липкая» — не растягивается под список. */
+@media (min-width: 921px) {
+  .panel--map {
+    position: sticky;
+    top: 20px;
+    height: calc(100vh - 40px);
+    max-height: 760px;
+    min-height: 0;
+  }
 }
 .panel__title {
   font-size: 16px;
