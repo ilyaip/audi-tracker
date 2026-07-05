@@ -18,7 +18,6 @@ const {
   serverCount,
   refresh,
   syncServerHistory,
-  clearHistory,
 } = useTracking()
 
 let timer: number | undefined
@@ -82,11 +81,6 @@ onBeforeUnmount(() => {
   document.removeEventListener('visibilitychange', onVisibilityChange)
 })
 
-function onClear() {
-  if (confirm('Очистить накопленную историю маршрута?')) {
-    clearHistory()
-  }
-}
 </script>
 
 <template>
@@ -114,9 +108,6 @@ function onClear() {
         <span v-if="lastUpdated" class="updated">
           обновлено {{ timeAgo(lastUpdated) }} · авто каждые 15 мин
         </span>
-        <button class="btn btn--ghost" :disabled="loading" @click="onClear">
-          Очистить
-        </button>
         <button class="btn btn--primary" :disabled="loading" @click="refresh">
           <span v-if="loading" class="spinner" />
           {{ loading ? 'Обновляем…' : 'Обновить статус' }}
